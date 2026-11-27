@@ -337,6 +337,30 @@ describe('rules', () => {
     });
   });
 
+  test('Bucket with only objectSizeGreaterThan does not report a type validation warning', () => {
+    // GIVEN
+    const stack = new Stack();
+
+    // WHEN
+    new Bucket(stack, 'Bucket', {
+      lifecycleRules: [{
+        objectSizeGreaterThan: 1024 * 1024,
+        expiration: Duration.days(30),
+      }],
+    });
+
+    // THEN
+    Template.fromStack(stack).hasResourceProperties('AWS::S3::Bucket', {
+      LifecycleConfiguration: {
+        Rules: [{
+          ObjectSizeGreaterThan: 1048576,
+          ExpirationInDays: 30,
+          Status: 'Enabled',
+        }],
+      },
+    });
+  });
+
   test('throws when neither transitionDate nor transitionAfter is specified', () => {
     // GIVEN
     const stack = new Stack();
