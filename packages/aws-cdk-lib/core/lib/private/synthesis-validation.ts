@@ -8,6 +8,8 @@ import type { Acknowledgement } from './collect-acknowledged-rule-ids';
 import { collectAcknowledgedRules } from './collect-acknowledged-rule-ids';
 import { iterateAssembliesPostorder, iterateAssembliesPreorder } from './construct-iteration';
 import { lit } from './literal-string';
+import type { LocationAcknowledgement } from './location-acknowledgement';
+import { collectLocationAcknowledgements, findLocationAcknowledgement } from './location-acknowledgement';
 import * as cxapi from '../../../cx-api';
 import { _convertCloudAssemblyBuilder } from '../../../cx-api/lib/legacy-moved';
 import type { App } from '../app';
@@ -297,8 +299,9 @@ function inferConstructPathsFromLogicalIds(reports: NamedValidationPluginReport[
 function collectSuppressions(root: App, reports: NamedValidationPluginReport[]) {
   const suppressedByReport: Map<number, SuppressedViolation[]> = new Map();
   const acknowledgedRules = collectAcknowledgedRules(root);
+  const locationAcknowledgements = collectLocationAcknowledgements(root);
 
-  if (Object.keys(acknowledgedRules).length > 0) {
+  if (Object.keys(acknowledgedRules).length > 0 || Object.keys(locationAcknowledgements).length > 0) {
     for (let i = 0; i < reports.length; i++) {
       const suppressed = suppressInReport(reports[i]);
 
@@ -324,12 +327,14 @@ function collectSuppressions(root: App, reports: NamedValidationPluginReport[]) 
 
       const ruleName = normalizeValidationId(v.ruleName, ruleNamespace);
       const pathBasedSuppressions = acknowledgedRules[ruleName];
+      const locationSuppressions = locationAcknowledgements[ruleName];
 
-      if (!pathBasedSuppressions) {
+      if (!pathBasedSuppressions && !locationSuppressions) {
         continue;
       }
 
-      const { suppressedGroups, unsuppressed } = groupResourcesBySuppressions(v.violatingResources, pathBasedSuppressions);
+      const { suppressedGroups, unsuppressed } = groupResourcesBySuppressions(
+        v.violatingResources, pathBasedSuppressions ?? {}, locationSuppressions);
       mutable(v).violatingResources = unsuppressed;
 
       for (const suppressedGroup of suppressedGroups) {
@@ -350,7 +355,11 @@ function collectSuppressions(root: App, reports: NamedValidationPluginReport[]) 
   }
 }
 
-function groupResourcesBySuppressions(resources: PolicyViolatingResource[], pathBasedSuppressions: Record<string, Acknowledgement>) {
+function groupResourcesBySuppressions(
+  resources: PolicyViolatingResource[],
+  pathBasedSuppressions: Record<string, Acknowledgement>,
+  locationSuppressions?: Record<string, LocationAcknowledgement[]>,
+) {
   interface SuppressionGroup {
     acknowledgement: Acknowledgement;
     resources: PolicyViolatingResource[];
@@ -360,7 +369,7 @@ function groupResourcesBySuppressions(resources: PolicyViolatingResource[], path
   const suppressed: Record<string, SuppressionGroup> = {};
 
   for (const r of resources) {
-    const ack = findClosestAck(r);
+    const ack = findClosestAck(r) ?? findLocationAcknowledgement(r, locationSuppressions);
 
     if (ack) {
       suppressed[ack.acknowledgedAt] ??= { acknowledgement: ack, resources: [] };

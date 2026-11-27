@@ -382,6 +382,30 @@ describe('rules', () => {
     expect(() => Template.fromStack(stack)).toThrow(/ObjectSizeLessThan: 1024 is not of type 'string'.*\n\s*Default\/Bucket\/Child /);
   });
 
+  test('objectSizeGreaterThan does not acknowledge other type validation warnings of the bucket resource', () => {
+    // GIVEN
+    const stack = new Stack();
+    const bucket = new Bucket(stack, 'Bucket', {
+      lifecycleRules: [{
+        objectSizeGreaterThan: 1024 * 1024,
+        expiration: Duration.days(30),
+      }],
+    });
+
+    // WHEN
+    (bucket.node.defaultChild as CfnBucket).addPropertyOverride('BucketName', 123);
+
+    // THEN
+    let message = '';
+    try {
+      Template.fromStack(stack);
+    } catch (e: any) {
+      message = e.message;
+    }
+    expect(message).toMatch(/BucketName: 123 is not of type 'string'/);
+    expect(message).not.toMatch(/ObjectSizeGreaterThan/);
+  });
+
   test('throws when neither transitionDate nor transitionAfter is specified', () => {
     // GIVEN
     const stack = new Stack();

@@ -40,6 +40,7 @@ import { addConstructMetadata, MethodMetadata } from '../../core/lib/metadata-re
 import { noBoxStackTraces } from '../../core/lib/no-box-stack-traces';
 import { CfnReference } from '../../core/lib/private/cfn-reference';
 import { lit } from '../../core/lib/private/literal-string';
+import { acknowledgeRuleAtLocations } from '../../core/lib/private/location-acknowledgement';
 import { propertyInjectable } from '../../core/lib/prop-injectable';
 import * as cxapi from '../../cx-api';
 import * as regionInformation from '../../region-info';
@@ -2731,12 +2732,14 @@ export class Bucket extends BucketBase {
     }
 
     if (rule.objectSizeGreaterThan !== undefined && !this._suppressedGreaterThanTypeCheck) {
-      // Same type mismatch. Acknowledge it on the bucket's own resource only, so warnings of other resources
-      // under this construct are still reported.
-      Validations.of(this._resource).acknowledge({
-        id: 'CloudFormation-Validate::W9003',
-        reason: 'LifecycleRule.objectSizeGreaterThan is a number for historical reasons',
-      });
+      // Same type mismatch. Acknowledge it only for this property of the bucket's own resource, so other
+      // warnings are still reported.
+      acknowledgeRuleAtLocations(
+        this._resource,
+        'CloudFormation-Validate::W9003',
+        'LifecycleRule.objectSizeGreaterThan is a number for historical reasons',
+        /^Properties\.LifecycleConfiguration\.Rules\.\d+\.ObjectSizeGreaterThan$/,
+      );
       this._suppressedGreaterThanTypeCheck = true;
     }
   }
