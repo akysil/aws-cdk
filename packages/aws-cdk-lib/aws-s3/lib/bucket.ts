@@ -2568,6 +2568,7 @@ export class Bucket extends BucketBase {
   private readonly _resource: CfnBucket;
   private readonly reflection: BucketReflection;
   private _suppressedTypeCheck = false;
+  private _suppressedGreaterThanTypeCheck = false;
 
   constructor(scope: Construct, id: string, props: BucketProps = {}) {
     super(scope, id, {
@@ -2719,7 +2720,7 @@ export class Bucket extends BucketBase {
   public addLifecycleRule(rule: LifecycleRule) {
     this.lifecycleRules.push(rule);
 
-    if ((rule.objectSizeLessThan !== undefined || rule.objectSizeGreaterThan !== undefined) && !this._suppressedTypeCheck) {
+    if (rule.objectSizeLessThan !== undefined && !this._suppressedTypeCheck) {
       // These are typed as numbers by CDK, but as strings by CloudFormation. The validation plugin is going to complain
       // about the type mismatch, so suppress the warning for this construct if it's applicable.
       Validations.of(this).acknowledge({
@@ -2727,6 +2728,16 @@ export class Bucket extends BucketBase {
         reason: 'LifecycleRule.objectSizeLessThan and LifecycleRule.objectSizeGreaterThan are numbers for historical reasons',
       });
       this._suppressedTypeCheck = true;
+    }
+
+    if (rule.objectSizeGreaterThan !== undefined && !this._suppressedGreaterThanTypeCheck) {
+      // Same type mismatch. Acknowledge it on the bucket's own resource only, so warnings of other resources
+      // under this construct are still reported.
+      Validations.of(this._resource).acknowledge({
+        id: 'CloudFormation-Validate::W9003',
+        reason: 'LifecycleRule.objectSizeGreaterThan is a number for historical reasons',
+      });
+      this._suppressedGreaterThanTypeCheck = true;
     }
   }
 

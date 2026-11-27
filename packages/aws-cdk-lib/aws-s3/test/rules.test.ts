@@ -1,6 +1,6 @@
 import { Template } from '../../assertions';
-import { Duration, Stack } from '../../core';
-import { Bucket, StorageClass } from '../lib';
+import { Duration, RemovalPolicy, Stack } from '../../core';
+import { Bucket, CfnBucket, StorageClass } from '../lib';
 
 describe('rules', () => {
   test('Bucket with expiration days', () => {
@@ -359,6 +359,27 @@ describe('rules', () => {
         }],
       },
     });
+  });
+
+  test('objectSizeGreaterThan does not acknowledge type validation warnings of other resources in the bucket', () => {
+    // GIVEN
+    const stack = new Stack();
+    const bucket = new Bucket(stack, 'Bucket', {
+      lifecycleRules: [{
+        objectSizeGreaterThan: 1024 * 1024,
+        expiration: Duration.days(30),
+      }],
+    });
+
+    // WHEN
+    new CfnBucket(bucket, 'Child', {
+      lifecycleConfiguration: {
+        rules: [{ status: 'Enabled', objectSizeLessThan: 1024, expirationInDays: 30 }],
+      },
+    }).applyRemovalPolicy(RemovalPolicy.DESTROY);
+
+    // THEN
+    expect(() => Template.fromStack(stack)).toThrow(/ObjectSizeLessThan: 1024 is not of type 'string'.*\n\s*Default\/Bucket\/Child /);
   });
 
   test('throws when neither transitionDate nor transitionAfter is specified', () => {
